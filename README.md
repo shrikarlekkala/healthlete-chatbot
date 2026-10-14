@@ -1,77 +1,277 @@
-# Healthlete AI
+# HealthLete IQ - Streaming Chatbot API
 
-Healthlete AI (also known as Healthlete IQ) is a powerful, intelligence-driven API that helps evaluate marketing and commercial partnerships for athletes. By leveraging a vector-based Retrieval-Augmented Generation (RAG) system with OpenAI and PostgreSQL, Healthlete provides instant insights into an athlete's strengths, brand alignment, demographics, and public image.
+Branch: `feature/Streaming-chatbot`
 
-## Key Features
+HealthLete IQ is an intelligence-driven analytics API built to evaluate athlete performance, audience demographics, and commercial brand fit. 
 
-* **Intelligent Athlete Ingestion:** Cleans and processes raw athlete metadata (like social media stats, causes they support, demographics), generating vector embeddings for accurate search context.
-* **Smart RAG Chat System:** Query the AI about an athlete's brand fit. It searches through the database to give you highly specific, data-backed answers.
-* **Live Web Fallback:** If the database doesn't have enough context on a specific athlete, the AI falls back to a live web search to bring you the most up-to-date details.
-* **Modern API Architecture:** Built with a clean, layered architecture using FastAPI for speed and easy maintainability.
+This branch implements the real-time Server-Sent Events (SSE) streaming chat pipeline, an in-memory vector cache for athlete profiles, an API security layer, and query intent routing.
 
-## Project Architecture
+---
 
-We follow a clean, layered structure to keep the code human-readable, testable, and scalable:
+## Key Capabilities
 
-* `app/api/` - The FastAPI routes and endpoints (`/chat`, `/ingest`, `/athletes`).
-* `app/services/` - Core business logic for cleaning data and orchestrating ingestion.
-* `app/ai/` - All AI logic: prompts, vector embedding generation, and ChatGPT conversation routing.
-* `app/repositories/` - Safe, parameterized database access layer (no raw SQL anywhere else!).
-* `app/core/` - Configuration, environment variables, and thread-safe database connection pooling.
-* `tests/` - Standalone tests for ensuring end-to-end reliability (like `test_migration.py`).
+1. Server-Sent Events (SSE) Streaming
+   - Real-time token streaming via `POST /chat/stream`.
+   - Direct streaming without artificial word buffering or block delays.
+   - Structured SSE event lifecycle emitting metadata, token chunks, and final conversation state.
+
+2. In-Memory Vector TTL Cache
+   - In-memory cache for athlete profile vectors and chunks with a 10-minute sliding TTL.
+   - Vector similarity search runs in memory using vectorized cosine dot-product calculations.
+   - Eliminates redundant PostgreSQL pgvector queries on repeat turns.
+
+3. Zero-Login API Security
+   - Shared key authentication via `X-API-Key` header.
+   - Sliding-window in-memory rate limiting per client IP (default: 10 requests/minute).
+   - Request payload validation enforcing a maximum message length of 500 characters.
+
+4. Query Intent and Greeting Routing
+   - Conversational pleasantries (e.g., "Hi", "Hello", "Good morning") receive immediate warm greeting responses without triggering vector search or LLM web fallbacks.
+   - All athlete-related queries (career, sport, background, stats, brand fit, news) are classified in-scope.
+   - If profile data lacks specific facts, the pipeline falls back to OpenAI GPT-4.1 web search.
+   - Unrelated non-sports queries (e.g., coding, general trivia) receive a polite scope redirect.
+
+5. In-Memory Config Caching
+   - Configuration values in `app/core/config.py` are loaded once from `.env` and cached using `@lru_cache(maxsize=1)`.
+   - Avoids repeated disk reads and environment parsing during concurrent requests.
+
+---
+
+## Tech Stack
+
+- Framework: FastAPI (Python 3.10+)
+- Server: Uvicorn (Development) / Gunicorn with UvicornWorker (Production)
+- Database: PostgreSQL with pgvector extension
+- AI Models: OpenAI gpt-4o (main analyst), gpt-4.1 (web search fallback), text-embedding-3-small (embeddings)
+- Caching: In-memory TTL cache and functools.lru_cache (no Redis dependency)
+
+---
+
+## Repository Structure
+
+```
+healthlete-stream-chatbot/
+|-- app/
+|   |-- main.py                 # FastAPI application, CORS, and connection pool lifecycle
+|   |-- api/
+|   |   `-- v1/
+|   |       |-- router.py       # API v1 router aggregation
+|   |       |-- chat.py         # Endpoints: POST /chat and POST /chat/stream
+|   |       |-- health.py       # Health checks and system diagnostics
+|   |       |-- athletes.py     # Athlete management endpoints
+|   |       `-- ingest.py       # Profile ingestion and vector embedding generation
+|   |-- ai/
+|   |   |-- chat.py             # Chat pipelines: ask_stream() and ask()
+|   |   |-- embeddings.py       # OpenAI vector embedding generation
+|   |   |-- retrieval.py        # Vector similarity search and score filtering
+|   |   |-- web_search.py       # OpenAI Responses API web search integration
+|   |   `-- prompts/            # System instructions, context builders, and response templates
+|   |-- core/
+|   |   |-- config.py           # Cached environment settings (@lru_cache)
+|   |   |-- database.py         # PostgreSQL connection pool
+|   |   |-- openai_client.py    # OpenAI sync and async client singletons
+|   |   `-- security.py         # API key validation and IP rate limiter
+|   |-- repositories/
+|   |   |-- profile.py          # Database queries and AthleteVectorTTLCache
+|   |   `-- athlete.py          # Athlete record operations
+|   |-- schemas/
+|   |   |-- chat.py             # ChatRequest and ChatResponse schemas
+|   |   `-- athlete.py          # Ingestion schemas
+|   `-- utils/
+|       |-- format.py           # Text formatting helpers
+|       `-- text.py             # Decision parsing and response sanitization
+|-- run.py                      # Application runner
+|-- requirements.txt            # Python dependencies
+`-- .env.example                # Sample environment variables
+```
+
+---
+
+## Streaming Event Protocol
+
+The `/chat/stream` endpoint returns a Server-Sent Events stream (`Content-Type: text/event-stream`).
+
+### Event Sequence
+
+1. `meta`: Emitted when the request is validated and the athlete profile is resolved.
+```json
+data: {"type": "meta", "athlete_id": "511164d5-603d-4f52-a7d3-3b8a1424479c", "profile_name": "Tyson Fury"}
+```
+
+2. `content`: Emitted continuously as tokens are generated by the model.
+```json
+data: {"type": "content", "delta": "Tyson Fury is a professional heavyweight boxer."}
+```
+
+3. `done`: Emitted at stream completion with final metadata, decision path, and updated history.
+```json
+data: {
+  "type": "done",
+  "athlete_id": "511164d5-603d-4f52-a7d3-3b8a1424479c",
+  "profile_name": "Tyson Fury",
+  "path": "profile",
+  "decision": "PROFILE",
+  "answer": "Tyson Fury is a professional heavyweight boxer.",
+  "chat_history": [
+    {"role": "user", "content": "What sport does he play?"},
+    {"role": "assistant", "content": "Tyson Fury is a professional heavyweight boxer."}
+  ]
+}
+```
+
+---
+
+## Security Layer
+
+Every request to `/chat` and `/chat/stream` is evaluated against three checks:
+
+1. API Key Header
+   - Requests must provide the `X-API-Key` header matching `CHAT_API_KEY`.
+   - Missing or incorrect key returns HTTP `401 Unauthorized`.
+
+2. IP Rate Limiting
+   - Managed via an in-memory sliding window per client IP.
+   - Configured via `RATE_LIMIT_PER_MINUTE` (default: 10).
+   - Exceeding the threshold returns HTTP `429 Too Many Requests`.
+
+3. Payload Length Guard
+   - Maximum allowed question length is 500 characters.
+   - Messages exceeding the limit return HTTP `422 Unprocessable Entity`.
+
+---
+
+## Environment Configuration
+
+Create a `.env` file in the project root based on `.env.example`:
+
+| Variable | Description | Default |
+|---|---|---|
+| `OPENAI_API_KEY` | OpenAI API Secret Key | Required |
+| `API_HOST` | Host address to bind | `0.0.0.0` |
+| `API_PORT` | Port for the API server | `8000` |
+| `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | `*` |
+| `THREAD_POOL_LIMIT` | Thread pool token limit for async workers | `100` |
+| `DB_HOST` | PostgreSQL host | `localhost` |
+| `DB_PORT` | PostgreSQL port | `5432` |
+| `DB_USER` | PostgreSQL user | `postgres` |
+| `DB_PASSWORD` | PostgreSQL password | None |
+| `DB_NAME` | Database name | `healthlete` |
+| `DB_POOL_MIN` | Minimum connections in pool | `2` |
+| `DB_POOL_MAX` | Maximum connections in pool | `20` |
+| `DB_POOL_TIMEOUT` | Connection acquisition timeout in seconds | `10.0` |
+| `CHAT_MODEL` | Main conversational model | `gpt-4o` |
+| `EMBEDDING_MODEL` | Model used for vector embeddings | `text-embedding-3-small` |
+| `WEB_SEARCH_MODEL` | Model used for web search fallback | `gpt-4.1` |
+| `RETRIEVAL_LIMIT` | Top chunk limit for retrieval | `8` |
+| `SIMILARITY_THRESHOLD` | Minimum cosine similarity score | `0.75` |
+| `MAX_TOKENS` | Maximum tokens for chat completions | `800` |
+| `CHAT_TEMPERATURE` | Sampling temperature | `0.2` |
+| `HISTORY_TURNS` | Number of recent conversation turns kept | `3` |
+| `CHAT_API_KEY` | Secret handshake key for client access | Required |
+| `RATE_LIMIT_PER_MINUTE` | Maximum allowed requests per IP per minute | `10` |
+| `MAX_QUERY_LENGTH` | Maximum allowed character length for message | `500` |
+
+---
 
 ## Getting Started
 
 ### 1. Requirements
-* **Python 3.10+**
-* **PostgreSQL** with the `pgvector` extension enabled.
+- Python 3.10+
+- PostgreSQL with pgvector extension enabled
 
-### 2. Setup your Environment
-
-Rename `.env.example` to `.env` and fill in your credentials:
-```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=healthleteai_db
-DB_USER=postgres
-DB_PASSWORD=your_password_here
-
-OPENAI_API_KEY=sk-your-openai-key-here
-```
-
-### 3. Install Dependencies
+### 2. Setup
 ```bash
+git clone https://github.com/shrikarlekkala/healthlete-chatbot.git healthlete-stream-chatbot
+cd healthlete-stream-chatbot
+git checkout feature/Streaming-chatbot
+
 python -m venv venv
-source venv/bin/activate  # (On Windows use: .\venv\Scripts\activate)
+# On Windows:
+.\venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
+
 pip install -r requirements.txt
+cp .env.example .env
 ```
 
-### 4. Initialize the Database
-Ensure your PostgreSQL database is running, then create the required tables:
-```bash
-python scripts/create_db.py
-```
+### 3. Running the Server
 
-### 5. Run the API
-
-**Option A: Local Development (Windows / Mac / Linux)**
-For local testing and development, use the provided runner script. It utilizes Uvicorn and supports hot-reloading.
+Local development (with hot-reload):
 ```bash
 python run.py
 ```
-*The API will start on `http://0.0.0.0:3236`.*
-*You can view the interactive Swagger Documentation at `http://localhost:3236/docs`.*
 
-**Option B: Production (Linux / Unix)**
-For a production environment, bypass the python wrapper script. Use Gunicorn as a process manager with Uvicorn workers to efficiently handle multiple concurrent requests:
+Production deployment:
 ```bash
-gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:3236
+gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
-*(Ensure `ENVIRONMENT=production` is set in your `.env` file.)*
 
-## Testing
+---
 
-To test the end-to-end ingestion and chat system with dummy data, you can run the provided migration test script:
+## API Endpoints
+
+### 1. `POST /chat/stream`
+Streams token responses for athlete queries over SSE.
+
+Headers:
+- `Content-Type: application/json`
+- `X-API-Key: <CHAT_API_KEY>`
+
+Request:
+```json
+{
+  "athlete_id": "511164d5-603d-4f52-a7d3-3b8a1424479c",
+  "message": "What are his key achievements?",
+  "chat_history": []
+}
+```
+
+Example:
 ```bash
-python tests/test_migration.py
+curl -N -X POST "http://localhost:8000/chat/stream" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your_api_key_here" \
+  -d '{"athlete_id": "511164d5-603d-4f52-a7d3-3b8a1424479c", "message": "What are his key achievements?"}'
 ```
+
+### 2. `POST /chat`
+Synchronous JSON response for standard clients.
+
+Headers:
+- `Content-Type: application/json`
+- `X-API-Key: <CHAT_API_KEY>`
+
+Request:
+```json
+{
+  "athlete_id": "511164d5-603d-4f52-a7d3-3b8a1424479c",
+  "message": "Give me an overview of his audience fit.",
+  "chat_history": []
+}
+```
+
+Example:
+```bash
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your_api_key_here" \
+  -d '{"athlete_id": "511164d5-603d-4f52-a7d3-3b8a1424479c", "message": "Give me an overview of his audience fit."}'
+```
+
+### 3. `GET /health`
+Returns system status and pool metrics.
+
+Example:
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+## Troubleshooting
+
+- `401 Unauthorized`: Verify the `X-API-Key` header matches `CHAT_API_KEY` in `.env`.
+- `429 Too Many Requests`: Client IP exceeded the allowed requests per minute. Wait 60 seconds or adjust `RATE_LIMIT_PER_MINUTE`.
+- `422 Unprocessable Entity`: The input message exceeds 500 characters.
+- `pgvector extension error`: Verify PostgreSQL has pgvector installed (`CREATE EXTENSION IF NOT EXISTS vector;`).
