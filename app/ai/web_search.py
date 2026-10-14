@@ -1,9 +1,10 @@
-"""
-web_search.py — Web search fallback via OpenAI Responses API
+﻿"""
+web_search.py - Web search fallback via OpenAI Responses API
 ==============================================================
 """
 
 import logging
+import asyncio
 from typing import Dict, List, Tuple
 
 from app.core.config import WEB_SEARCH_MODEL, MAX_TOKENS, TEMPERATURE
@@ -47,7 +48,9 @@ def web_search_completion(profile_name: str, top_chunks_text: str,
 async def web_search_stream(profile_name: str, top_chunks_text: str,
                             partial_answer: str, gap: str, question: str,
                             history: List[Dict]):
-    """Streams web search completion tokens via OpenAI Responses API (AsyncOpenAI)."""
+    """Streams web search completion tokens via OpenAI Responses API (AsyncOpenAI).
+    Yields string content deltas directly.
+    """
     client = get_async_openai_client()
 
     instructions = prompts.CORE_ANALYST_INSTRUCTIONS + "\n" + prompts.WEB_SEARCH_INSTRUCTIONS
@@ -68,12 +71,16 @@ async def web_search_stream(profile_name: str, top_chunks_text: str,
                 temperature=TEMPERATURE,
                 stream=True,
             )
-            async for event in stream:
-                event_type = getattr(event, "type", "")
-                if event_type == "response.output_text.delta":
-                    delta = getattr(event, "delta", "")
-                    if delta:
-                        yield delta
+            try:
+                async for event in stream:
+                    if getattr(event, "type", "") == "response.output_text.delta":
+                        delta = getattr(event, "delta", "")
+                        if delta:
+                            yield delta
+            except (GeneratorExit, asyncio.CancelledError):
+                return
+            return
+        except (GeneratorExit, asyncio.CancelledError):
             return
         except Exception as exc:
             last_error = exc

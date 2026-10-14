@@ -1,5 +1,5 @@
-"""
-chat.py — Request and Response models for the /chat endpoint
+﻿"""
+chat.py - Request and Response models for the /chat endpoint
 """
 
 from typing import List, Optional
@@ -14,7 +14,11 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     athlete_id: str = Field(..., description="Unique athlete identifier (UUID)")
-    message: str = Field(..., description="User question or marketing analysis inquiry")
+    message: str = Field(
+        ...,
+        max_length=500,
+        description="User question or marketing analysis inquiry (maximum 500 characters)",
+    )
     chat_history: List[ChatMessage] = Field(
         default_factory=list,
         description="Historical messages in the current session for multi-turn conversational context",
