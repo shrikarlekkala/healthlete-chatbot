@@ -49,16 +49,9 @@ jobs:
           cat > /tmp/ssm-parameters.json <<'JSON'
           {
             "commands": [
-              "set -e",
-              "export HOME=/home/ubuntu",
-              "git config --global --add safe.directory /var/www/healthlete-stream-chatbot",
-              "cd /var/www/healthlete-stream-chatbot && git fetch origin Production",
-              "git reset --hard origin/Production",
-              "./venv/bin/python -m pip install -r requirements.txt",
-              "python -m pip install -r requirements.txt",
-              "pm2 restart start",
-              "pm2 save",
-              "pm2 status"
+              "set -e", "export HOME=/home/ubuntu", 
+              "cd /var/www/healthlete-stream-chatbot",
+              "git config --global --add safe.directory /var/www/healthlete-stream-chatbot", "git fetch origin Production", "git reset --hard origin/Production", "sudo -u ubuntu -H /var/www/healthlete-stream-chatbot/venv/bin/python -m pip install -r /var/www/healthlete-stream-chatbot/requirements.txt", "sudo -u ubuntu -H bash -c 'cd /var/www/healthlete-stream-chatbot && pm2 restart start'", "sudo -u ubuntu -H bash -c 'pm2 save'", "sudo -u ubuntu -H bash -c 'pm2 status'" ]
             ]
           }
           JSON
