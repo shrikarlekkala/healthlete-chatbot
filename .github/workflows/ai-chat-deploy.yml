@@ -52,7 +52,8 @@ jobs:
             --comment "Deploy Healthlete chatbot" \
             --parameters 'commands=[
               "set -e",
-              "cd /var/www/healthlete-stream-chatbot",
+              "git config --global --add safe.directory /var/www/healthlete-stream-chatbot",
+              "cd /var/www/healthlete-stream-chatbot"
               "git fetch origin Production",
               "git reset --hard origin/Production",
               "source venv/bin/activate",
