@@ -95,4 +95,3 @@ jobs:
 
           echo "Deployment status polling timed out."
           exit 1
-```
