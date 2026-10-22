@@ -1,15 +1,11 @@
-import psycopg2
 import os
-from dotenv import load_dotenv
+import sys
+import psycopg2
 
-# Load config from the root .env
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+# Ensure repository root is in python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "healthleteai_db")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+from app.core.config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
 
 conn = psycopg2.connect(
     host=DB_HOST,

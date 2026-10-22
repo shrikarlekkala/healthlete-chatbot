@@ -1,24 +1,80 @@
-"""
-config.py — Centralized application configuration with LRU Cache
-================================================================
-All environment variables are loaded once and cached using @lru_cache.
-Subsequent calls to get_settings() return the cached Settings object,
-preventing redundant disk reads / environment variable parses.
-"""
-
+import json
 from functools import lru_cache
 import os
-from typing import List
+from typing import List, Optional
+import urllib.request
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-class Settings:
-    """Application settings loaded once from environment variables."""
+def _get_aws_region() -> Optional[str]:
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+    if region:
+        return region
+    try:
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/api/token",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(req, timeout=1) as resp:
+            token = resp.read().decode("utf-8")
+        reg_req = urllib.request.Request(
+            "http://169.254.169.254/latest/meta-data/placement/region",
+            headers={"X-aws-ec2-metadata-token": token},
+        )
+        with urllib.request.urlopen(reg_req, timeout=1) as resp:
+            return resp.read().decode("utf-8").strip()
+    except Exception:
+        pass
+    return "us-east-1"
 
+
+def _load_aws_secrets():
+    if os.getenv("DISABLE_AWS_SECRETS", "false").lower() in ("true", "1", "yes"):
+        return
+
+    secret_name = os.getenv("AWS_SECRET_NAME", "healthlete/prod/database")
+    region_name = _get_aws_region()
+
+    try:
+        import boto3
+
+        client = boto3.client("secretsmanager", region_name=region_name)
+        response = client.get_secret_value(SecretId=secret_name)
+
+        if "SecretString" in response:
+            secrets = json.loads(response["SecretString"])
+
+            field_mappings = {
+                "host": "DB_HOST",
+                "endpoint": "DB_HOST",
+                "port": "DB_PORT",
+                "username": "DB_USER",
+                "user": "DB_USER",
+                "password": "DB_PASSWORD",
+                "dbname": "DB_NAME",
+                "database": "DB_NAME",
+            }
+
+            for key, val in secrets.items():
+                val_str = str(val)
+                os.environ[key] = val_str
+                os.environ[key.upper()] = val_str
+                lower_key = key.lower()
+                if lower_key in field_mappings:
+                    os.environ[field_mappings[lower_key]] = val_str
+    except Exception:
+        pass
+
+
+_load_aws_secrets()
+
+
+class Settings:
     def __init__(self):
-        # ── API ──────────────────────────────────────────────────────────────
+        # API
         self.API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
         self.API_PORT: int = int(os.getenv("API_PORT", "8000"))
         self.THREAD_POOL_LIMIT: int = int(os.getenv("THREAD_POOL_LIMIT", "100"))
@@ -26,12 +82,12 @@ class Settings:
             o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()
         ]
 
-        # ── Security ─────────────────────────────────────────────────────────
+        # Security
         self.CHAT_API_KEY: str = os.getenv("CHAT_API_KEY")
         self.RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "5"))
         self.MAX_QUERY_LENGTH: int = int(os.getenv("MAX_QUERY_LENGTH", "500"))
 
-        # ── Database ─────────────────────────────────────────────────────────
+        # Database
         self.DB_HOST: str = os.getenv("DB_HOST", "localhost")
         self.DB_PORT: int = int(os.getenv("DB_PORT", "5432"))
         self.DB_USER: str = os.getenv("DB_USER", "postgres")
@@ -41,13 +97,13 @@ class Settings:
         self.DB_POOL_MAX: int = int(os.getenv("DB_POOL_MAX", "20"))
         self.DB_POOL_TIMEOUT: float = float(os.getenv("DB_POOL_TIMEOUT", "10.0"))
 
-        # ── OpenAI ───────────────────────────────────────────────────────────
+        # OpenAI
         self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
         self.EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         self.CHAT_MODEL: str = os.getenv("CHAT_MODEL", "gpt-4o")
         self.WEB_SEARCH_MODEL: str = os.getenv("WEB_SEARCH_MODEL", "gpt-4.1")
 
-        # ── Chat pipeline ────────────────────────────────────────────────────
+        # Chat pipeline
         self.RETRIEVAL_LIMIT: int = int(os.getenv("RETRIEVAL_LIMIT", "8"))
         self.SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.75"))
         self.MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "800"))
@@ -57,12 +113,9 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return the cached Settings singleton (cached in-memory via LRU cache)."""
     return Settings()
 
 
-# ── Global Cached Instance & Backward Compatibility Module Exports ──────
-# Keeps existing imports like `from app.core.config import CHAT_MODEL` fully working.
 settings = get_settings()
 
 API_HOST: str = settings.API_HOST
