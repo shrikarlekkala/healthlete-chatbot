@@ -46,22 +46,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --comment "Deploy Healthlete chatbot" \
-            --parameters 'commands=[
+          cat > /tmp/ssm-parameters.json <<'JSON'
+          {
+            "commands": [
               "set -e",
+              "export HOME=/home/ubuntu",
               "git config --global --add safe.directory /var/www/healthlete-stream-chatbot",
-              "cd /var/www/healthlete-stream-chatbot",
-              "git fetch origin Production",
+              "cd /var/www/healthlete-stream-chatbot && git fetch origin Production",
               "git reset --hard origin/Production",
               "source venv/bin/activate",
               "python -m pip install -r requirements.txt",
               "pm2 restart start",
               "pm2 save",
               "pm2 status"
-            ]' \
+            ]
+          }
+          JSON
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy Healthlete chatbot" \
+            --parameters file:///tmp/ssm-parameters.json \
             --query 'Command.CommandId' \
             --output text)
 
@@ -96,3 +102,4 @@ jobs:
 
           echo "Deployment status polling timed out."
           exit 1
+
