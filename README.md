@@ -1,4 +1,4 @@
-# HealthLete IQ - Streaming Chatbot API
+# HealthLete IQ - Streaming Chatbot API 
 
 Branch: `feature/Streaming-chatbot`
 
