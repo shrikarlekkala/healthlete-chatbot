@@ -39,6 +39,7 @@ jobs:
           role-to-assume: arn:aws:iam::973429899719:role/healthlete-prod-github-actions-role
           aws-region: us-east-2
 
+      
       - name: Deploy application using SSM
         env:
           INSTANCE_ID: i-067eb9e96eea2a00a
@@ -46,21 +47,26 @@ jobs:
         run: |
           set -euo pipefail
 
+          COMMANDS=$(jq -nc '{
+            commands: [
+              "set -e",
+              "export HOME=/home/ubuntu",
+              "cd /var/www/healthlete-stream-chatbot",
+              "git config --global --add safe.directory /var/www/healthlete-stream-chatbot",
+              "git fetch origin Production",
+              "git reset --hard origin/Production",
+              "sudo -u ubuntu -H /var/www/healthlete-stream-chatbot/venv/bin/python -m pip install -r /var/www/healthlete-stream-chatbot/requirements.txt",
+              "sudo -u ubuntu -H bash -c \"cd /var/www/healthlete-stream-chatbot && pm2 restart start\"",
+              "sudo -u ubuntu -H bash -c \"pm2 save\"",
+              "sudo -u ubuntu -H bash -c \"pm2 status\""
+            ]
+          }')
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Healthlete chatbot" \
-            --parameters 'commands=[
-              "set -e",
-              "cd /var/www/healthlete-stream-chatbot",
-              "git fetch origin Production",
-              "git reset --hard origin/Production",
-              "source venv/bin/activate",
-              "python -m pip install -r requirements.txt",
-              "pm2 restart start",
-              "pm2 save",
-              "pm2 status"
-            ]' \
+            --parameters "$COMMANDS" \
             --query 'Command.CommandId' \
             --output text)
 
