@@ -54,7 +54,7 @@ jobs:
               "git config --global --add safe.directory /var/www/healthlete-stream-chatbot",
               "cd /var/www/healthlete-stream-chatbot && git fetch origin Production",
               "git reset --hard origin/Production",
-              "source venv/bin/activate",
+              "./venv/bin/python -m pip install -r requirements.txt",
               "python -m pip install -r requirements.txt",
               "pm2 restart start",
               "pm2 save",
