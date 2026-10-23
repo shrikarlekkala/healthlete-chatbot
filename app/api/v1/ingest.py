@@ -4,16 +4,22 @@ ingest.py — Profile ingestion endpoint
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.schemas.ingest import IngestResponse
+from app.core.security import enforce_security
 from app.services import cleaner
 from app.services import ingestion
 
 router = APIRouter(tags=["Athlete Ingestion"])
 
 
-@router.post("/ingest", response_model=IngestResponse, summary="Ingest and Index Athlete Profile")
+@router.post(
+    "/ingest",
+    response_model=IngestResponse,
+    summary="Ingest and Index Athlete Profile",
+    dependencies=[Depends(enforce_security)],
+)
 def ingest(payload: Dict[str, Any] = Body(..., description="Comprehensive athlete profile JSON data")):
     """
     Ingest, normalize, and semantically index an athlete profile dataset.

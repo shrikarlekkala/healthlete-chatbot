@@ -2,16 +2,22 @@
 athletes.py — Athlete management endpoints
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.athlete import DeleteResponse
+from app.core.security import enforce_security
 from app.services import ingestion
 from app.api.v1.chat import clean_id
 
 router = APIRouter(tags=["Athlete Management"])
 
 
-@router.delete("/athlete/{athlete_id}", response_model=DeleteResponse, summary="Delete Athlete Profile")
+@router.delete(
+    "/athlete/{athlete_id}",
+    response_model=DeleteResponse,
+    summary="Delete Athlete Profile",
+    dependencies=[Depends(enforce_security)],
+)
 def delete_athlete(athlete_id: str):
     """
     Remove an athlete profile and all associated vector embeddings from the knowledge store.

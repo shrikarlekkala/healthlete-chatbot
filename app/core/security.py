@@ -1,4 +1,4 @@
-﻿"""
+"""
 security.py - High-performance security middleware & dependencies
 ===================================================================
 1. X-API-Key verification (timing-attack resistant via hmac)
@@ -11,7 +11,8 @@ import time
 from collections import deque
 from typing import Dict, Optional
 
-from fastapi import Header, HTTPException, Request, Security, status
+from fastapi import HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader
 
 from app.core.config import CHAT_API_KEY, RATE_LIMIT_PER_MINUTE, MAX_QUERY_LENGTH
 
@@ -78,7 +79,10 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "127.0.0.1"
 
 
-def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> str:
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def verify_api_key(x_api_key: Optional[str] = Security(api_key_header)) -> str:
     """Validates the private X-API-Key header against CHAT_API_KEY."""
     if not x_api_key:
         raise HTTPException(
@@ -86,7 +90,7 @@ def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -
             detail="Missing required security header: 'X-API-Key'",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    if not hmac.compare_digest(x_api_key.strip(), CHAT_API_KEY.strip()):
+    if not CHAT_API_KEY or not hmac.compare_digest(x_api_key.strip(), CHAT_API_KEY.strip()):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid 'X-API-Key' provided.",
