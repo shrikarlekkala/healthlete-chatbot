@@ -14,6 +14,7 @@ import uvicorn
 
 from app.core.config import API_HOST, API_PORT, THREAD_POOL_LIMIT, ALLOWED_ORIGINS
 from app.core.database import init_db_pool, close_db_pool
+from app.core.middleware import GzipDecompressionMiddleware
 from app.api.v1.router import api_router
 
 # UTF-8 stdout configuration for Windows terminals
@@ -73,6 +74,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GzipDecompressionMiddleware)
 
 # Include all API v1 endpoints
 app.include_router(api_router)

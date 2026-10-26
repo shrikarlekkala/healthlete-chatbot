@@ -1,49 +1,34 @@
-"""
-ingest.py — Profile ingestion endpoint
-"""
-
 from typing import Any, Dict
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.schemas.ingest import IngestResponse
 from app.core.security import enforce_security
+from app.core.config import CHAT_API_KEY
 from app.services import cleaner
 from app.services import ingestion
+from app.services.payload_decoder import decode_payload
 
 router = APIRouter(tags=["Athlete Ingestion"])
 
 
-@router.post(
-    "/ingest",
-    response_model=IngestResponse,
-    summary="Ingest and Index Athlete Profile",
-    dependencies=[Depends(enforce_security)],
-)
-def ingest(payload: Dict[str, Any] = Body(..., description="Comprehensive athlete profile JSON data")):
-    """
-    Ingest, normalize, and semantically index an athlete profile dataset.
-
-    Normalizes incoming profile attributes, generates contextual semantic chunks,
-    calculates cryptographic content hashes to avoid redundant embedding calls,
-    and updates the vector database.
-    """
+def _process_athlete_payload(payload: Dict[str, Any]) -> IngestResponse:
+    """Core pipeline: clean json, extract metadata, and index in vector database."""
     try:
         text = cleaner.convert_json_to_text(payload)
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Cleaning error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cleaning error: {e}")
 
     if not text.strip():
-        raise HTTPException(
-            status_code=422, detail="Cleaning produced empty text. Check the JSON.")
+        raise HTTPException(status_code=422, detail="Cleaning produced empty text. Check the JSON.")
 
     try:
         athlete_id, profile_name = ingestion.extract_metadata(text)
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=422,
-            detail="Could not read the athlete Id and Full Name from this JSON.")
+            detail="Could not read the athlete Id and Full Name from this JSON.",
+        )
 
     try:
         summary = ingestion.process_and_store_flattened_text(
@@ -60,3 +45,21 @@ def ingest(payload: Dict[str, Any] = Body(..., description="Comprehensive athlet
         word_count=len(text.split()),
         **summary,
     )
+
+
+@router.post(
+    "/ingest",
+    response_model=IngestResponse,
+    summary="Ingest and Index Athlete Profile",
+    dependencies=[Depends(enforce_security)],
+)
+def ingest(payload: Dict[str, Any] = Body(..., description="Athlete profile JSON, or compressed wrapper")):
+    """
+    Ingest, normalize, and semantically index an athlete profile dataset.
+    Supports:
+    1. Standard raw JSON.
+    2. Base64 / gzip-compressed payload: {"compressed": true, "payload": "..."}
+    """
+    resolved_payload = decode_payload(payload, secret_key=CHAT_API_KEY)
+    return _process_athlete_payload(resolved_payload)
+

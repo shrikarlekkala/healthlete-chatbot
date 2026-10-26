@@ -1,7 +1,3 @@
-"""
-ingest.py — Request and Response models for the /ingest endpoint
-"""
-
 from pydantic import BaseModel, Field
 
 
@@ -15,3 +11,4 @@ class IngestResponse(BaseModel):
     inserted_new: int = Field(..., description="Count of new chunks embedded and stored")
     updated_changed: int = Field(..., description="Count of modified chunks re-embedded")
     deleted_orphans: int = Field(..., description="Count of obsolete orphaned chunks removed")
+

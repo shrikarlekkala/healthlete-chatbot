@@ -29,12 +29,17 @@ CREATE TABLE IF NOT EXISTS profile_chunks (
     chunk_hash VARCHAR(64),
     embedding vector(1536),
     chunk_index INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, chunk_index)
 );
+
+ALTER TABLE profile_chunks ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE profile_chunks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 """
 cursor.execute(create_table_query)
 conn.commit()
 
 cursor.close()
 conn.close()
-print("Table created successfully!")
+print("Table created/updated successfully!")

@@ -8,3 +8,4 @@ pgvector
 anyio
 gunicorn
 boto3
+cryptography

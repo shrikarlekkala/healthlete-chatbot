@@ -123,7 +123,7 @@ data: {
 
 ## Security Layer
 
-Every request to `/chat` and `/chat/stream` is evaluated against three checks:
+Every request to `/chat/stream` is evaluated against three checks:
 
 1. API Key Header
    - Requests must provide the `X-API-Key` header matching `CHAT_API_KEY`.
@@ -131,7 +131,7 @@ Every request to `/chat` and `/chat/stream` is evaluated against three checks:
 
 2. IP Rate Limiting
    - Managed via an in-memory sliding window per client IP.
-   - Configured via `RATE_LIMIT_PER_MINUTE` (default: 10).
+   - Configured via `RATE_LIMIT_PER_MINUTE` (default: 20).
    - Exceeding the threshold returns HTTP `429 Too Many Requests`.
 
 3. Payload Length Guard

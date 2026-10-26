@@ -1,4 +1,4 @@
-﻿"""
+"""
 profile.py - Database access layer for profile_chunks with 5-min TTL Vector Cache
 ==================================================================================
 All raw SQL queries for the profile_chunks table live here.
@@ -96,7 +96,8 @@ UPSERT_QUERY = """
          profile_name = EXCLUDED.profile_name,
          chunk_text = EXCLUDED.chunk_text,
          chunk_hash = EXCLUDED.chunk_hash,
-         embedding = EXCLUDED.embedding
+         embedding = EXCLUDED.embedding,
+         updated_at = CURRENT_TIMESTAMP
 """
 
 
