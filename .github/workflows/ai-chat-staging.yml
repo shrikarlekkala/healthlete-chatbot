@@ -39,7 +39,8 @@ jobs:
 
           COMMANDS=$(jq -nc '{
             commands: [
-             "set -e", "export HOME=/home/ubuntu",
+             "set -e",
+             "export HOME=/home/ubuntu",
              "cd /var/www/html/healthlete-chatbot", 
              "git config --global --add safe.directory /var/www/html/healthlete-chatbot",
              "git fetch origin staging", "git reset --hard origin/staging", 
