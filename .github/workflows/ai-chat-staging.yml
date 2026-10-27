@@ -48,9 +48,9 @@ jobs:
               "git fetch origin staging",
               "git reset --hard origin/staging",
               "sudo -u ubuntu -H /var/www/html/healthlete-chatbot/venv/bin/python -m pip install -r /var/www/html/healthlete-chatbot/requirements.txt",
-              "sudo -u ubuntu -H bash -c \"cd /var/www/html/healthlete-chatbot && pm2 restart healthlete-aichatbot\"",
-              "sudo -u ubuntu -H bash -c \"pm2 save\"",
-              "sudo -u ubuntu -H bash -c \"pm2 status\""
+              "sudo -u ubuntu -H /bin/bash -c 'export HOME=/home/ubuntu; export PATH=/home/ubuntu/.nvm/versions/node/v24.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; cd /var/www/html/healthlete-chatbot; /home/ubuntu/.nvm/versions/node/v24.22.1/bin/pm2 restart healthlete-aichatbot'",
+              "sudo -u ubuntu -H /bin/bash -c 'export HOME=/home/ubuntu; export PATH=/home/ubuntu/.nvm/versions/node/v24.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; /home/ubuntu/.nvm/versions/node/v24.22.1/bin/pm2 save'",
+              "sudo -u ubuntu -H /bin/bash -c 'export HOME=/home/ubuntu; export PATH=/home/ubuntu/.nvm/versions/node/v24.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; /home/ubuntu/.nvm/versions/node/v24.22.1/bin/pm2 status'"
             ]
           }')
 
