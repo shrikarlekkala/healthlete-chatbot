@@ -29,17 +29,12 @@ jobs:
           role-to-assume: arn:aws:iam::973429899719:role/healthlete-staging-github-actions-role
           aws-region: us-east-2
 
-      - name: Deploy application using SSM
-        env:
-          INSTANCE_ID: i-0e6d537e950ac27f4
+      - name: Prepare SSM deployment parameters
         shell: bash
         run: |
-          set -euo pipefail
-
-          COMMANDS=$(python3 -c '
-          import json
-
-          commands = [
+          cat > /tmp/ssm-parameters.json <<'JSON'
+          {
+            "commands": [
               "set -e",
               "export HOME=/home/ubuntu",
               "cd /var/www/html/healthlete-chatbot",
@@ -47,20 +42,28 @@ jobs:
               "git fetch origin staging",
               "git reset --hard origin/staging",
               "sudo -u ubuntu -H /var/www/html/healthlete-chatbot/venv/bin/python -m pip install -r /var/www/html/healthlete-chatbot/requirements.txt",
-              "sudo -u ubuntu -H /bin/bash -c '\\''export HOME=/home/ubuntu; export NVM_DIR=/home/ubuntu/.nvm; source /home/ubuntu/.nvm/nvm.sh; cd /var/www/html/healthlete-chatbot; pm2 restart healthlete-aichatbot'\\''",
-              "sudo -u ubuntu -H /bin/bash -c '\\''export HOME=/home/ubuntu; export NVM_DIR=/home/ubuntu/.nvm; source /home/ubuntu/.nvm/nvm.sh; pm2 save; pm2 status'\\''"
-          ]
+              "sudo -u ubuntu -H /bin/bash -c 'export HOME=/home/ubuntu; export PATH=/home/ubuntu/.nvm/versions/node/v24.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; /home/ubuntu/.nvm/versions/node/v24.22.1/bin/pm2 restart healthlete-aichatbot'",
+              "sudo -u ubuntu -H /bin/bash -c 'export HOME=/home/ubuntu; export PATH=/home/ubuntu/.nvm/versions/node/v24.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; /home/ubuntu/.nvm/versions/node/v24.22.1/bin/pm2 save'",
+              "sudo -u ubuntu -H /bin/bash -c 'export HOME=/home/ubuntu; export PATH=/home/ubuntu/.nvm/versions/node/v24.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; /home/ubuntu/.nvm/versions/node/v24.22.1/bin/pm2 status'"
+            ]
+          }
+          JSON
 
-          print(json.dumps({"commands": commands}))
-          ')
+          python3 -m json.tool /tmp/ssm-parameters.json >/dev/null
+          echo "SSM parameters JSON validated."
 
-          echo "Sending deployment command to EC2..."
+      - name: Deploy application using SSM
+        env:
+          INSTANCE_ID: i-0e6d537e950ac27f4
+        shell: bash
+        run: |
+          set -euo pipefail
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Healthlete chatbot staging" \
-            --parameters "$COMMANDS" \
+            --parameters file:///tmp/ssm-parameters.json \
             --query 'Command.CommandId' \
             --output text)
 
