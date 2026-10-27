@@ -42,6 +42,7 @@ jobs:
               "set -e",
               "export HOME=/home/ubuntu",
               "export NVM_DIR=/home/ubuntu/.nvm",
+              "export PATH=/home/ubuntu/.nvm/versions/node/v24.22.1/bin:$PATH",
               "cd /var/www/html/healthlete-chatbot",
               "git config --global --add safe.directory /var/www/html/healthlete-chatbot",
               "git fetch origin staging",
