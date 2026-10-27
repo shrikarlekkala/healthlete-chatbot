@@ -22,14 +22,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-            
+
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::973429899719:role/healthlete-staging-github-actions-role
           aws-region: us-east-2
 
-      
       - name: Deploy application using SSM
         env:
           INSTANCE_ID: i-0e6d537e950ac27f4
@@ -37,23 +36,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          COMMANDS=$(jq -nc '{
-            commands: [
-             "set -e",
-             "export HOME=/home/ubuntu",
-             "cd /var/www/html/healthlete-chatbot", 
-             "git config --global --add safe.directory /var/www/html/healthlete-chatbot",
-             "git fetch origin staging", "git reset --hard origin/staging", 
-             "sudo -u ubuntu -H /var/www/html/healthlete-chatbot/venv/bin/python -m pip install -r /var/www/html/healthlete-chatbot/requirements.txt",
-             "sudo -u ubuntu -H /bin/bash -lc \"export HOME=/home/ubuntu; export NVM_DIR=/home/ubuntu/.nvm; source /home/ubuntu/.nvm/nvm.sh; cd /var/www/html/healthlete-chatbot; pm2 restart healthlete-aichatbot\"", 
-             "sudo -u ubuntu -H /bin/bash -lc \"export HOME=/home/ubuntu; export NVM_DIR=/home/ubuntu/.nvm; source /home/ubuntu/.nvm/nvm.sh; pm2 save; pm2 status\"" ]
-           ]
-          }')
+          COMMANDS=$(python3 -c '
+          import json
+
+          commands = [
+              "set -e",
+              "export HOME=/home/ubuntu",
+              "cd /var/www/html/healthlete-chatbot",
+              "git config --global --add safe.directory /var/www/html/healthlete-chatbot",
+              "git fetch origin staging",
+              "git reset --hard origin/staging",
+              "sudo -u ubuntu -H /var/www/html/healthlete-chatbot/venv/bin/python -m pip install -r /var/www/html/healthlete-chatbot/requirements.txt",
+              "sudo -u ubuntu -H /bin/bash -c '\\''export HOME=/home/ubuntu; export NVM_DIR=/home/ubuntu/.nvm; source /home/ubuntu/.nvm/nvm.sh; cd /var/www/html/healthlete-chatbot; pm2 restart healthlete-aichatbot'\\''",
+              "sudo -u ubuntu -H /bin/bash -c '\\''export HOME=/home/ubuntu; export NVM_DIR=/home/ubuntu/.nvm; source /home/ubuntu/.nvm/nvm.sh; pm2 save; pm2 status'\\''"
+          ]
+
+          print(json.dumps({"commands": commands}))
+          ')
+
+          echo "Sending deployment command to EC2..."
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy Healthlete chatbot" \
+            --comment "Deploy Healthlete chatbot staging" \
             --parameters "$COMMANDS" \
             --query 'Command.CommandId' \
             --output text)
