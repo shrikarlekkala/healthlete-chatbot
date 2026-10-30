@@ -35,7 +35,7 @@ def _load_aws_secrets():
     if os.getenv("DISABLE_AWS_SECRETS", "false").lower() in ("true", "1", "yes"):
         return
 
-    secret_name = os.getenv("AWS_SECRET_NAME", "healthlete/prod/database")
+    secret_name = os.getenv("AWS_SECRET_NAME")
     region_name = _get_aws_region()
 
     try:
