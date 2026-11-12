@@ -9,6 +9,7 @@ Keep these names in sync with the NestJS assistant module.
 from typing import Any, Dict, List
 
 SEARCH_ATHLETES = "search_athletes"
+GET_ATHLETE_DETAILS = "get_athlete_details"
 GET_SHORTLIST = "get_shortlist"
 GET_CAMPAIGNS = "get_campaigns"
 GET_PARTNERSHIP_REQUESTS = "get_partnership_requests"
@@ -17,6 +18,7 @@ ANSWER_DIRECTLY = "answer_directly"
 
 TOOL_NAMES = {
     SEARCH_ATHLETES,
+    GET_ATHLETE_DETAILS,
     GET_SHORTLIST,
     GET_CAMPAIGNS,
     GET_PARTNERSHIP_REQUESTS,
@@ -86,6 +88,20 @@ TOOLS: List[Dict[str, Any]] = [
                 "enum": ["match", "resonance", "credibility", "trust"],
             },
             "limit": {"type": "integer", "minimum": 1, "maximum": 10},
+        },
+    ),
+    _tool(
+        GET_ATHLETE_DETAILS,
+        "Full profile of ONE named athlete: bio, sport, health story and "
+        "advocacy, the user's brand scores and why, audience (age, gender, "
+        "countries, interests, real followers), social accounts (followers, "
+        "engagement, estimated post price), recent posts, brand safety and the "
+        "user's partnership requests with them.",
+        {
+            "name": {
+                "type": "string",
+                "description": "The athlete's name as the user wrote it.",
+            },
         },
     ),
     _tool(
