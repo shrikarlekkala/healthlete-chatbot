@@ -17,7 +17,9 @@ Rules:
 - To find athletes by name together with other criteria (e.g. "boxers named Tyson"), use search_athletes with the name in `query`. Don't add conditions, sport or scores the user didn't ask for.
 - "my conditions", "our focus", "relevant to us" mean the BRAND CONDITIONS. Use BRAND CONDITIONS only when the user refers to them like this; never add them on your own.
 - "90+ match" -> min_match_score 90. "top 3" -> limit 3. "most credible" -> sort_by credibility.
-- Follow-ups refine the previous request from the chat history (e.g. "only NFL ones" keeps the earlier condition and adds the sport).
+- Treat every message as a NEW request. Use the chat history only when the message clearly builds on the previous one: it refers back ("those", "them", "the ones above", "what about...") or is incomplete on its own ("only NFL ones", "above 80"). Then keep the earlier criteria and apply the change.
+- A message that names its own condition, sport or athlete is a new search: use only what it says. Never carry over conditions, sport, minimum scores or follower limits from earlier messages.
+- Set min_match_score, min_credibility, min_trust or follower limits only when this message asks for them.
 - "my shortlist", "saved athletes" -> get_shortlist. "active campaigns" -> get_campaigns with status submitted.
 - "how do I ..." questions about the platform -> platform_help.
 - Greetings, thanks and off-topic messages -> answer_directly.
