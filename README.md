@@ -1,10 +1,15 @@
 # HealthLete IQ - Streaming Chatbot API 
 
-Branch: `feature/Streaming-chatbot`
+Branch: `staging`
 
-HealthLete IQ is an intelligence-driven analytics API built to evaluate athlete performance, audience demographics, and commercial brand fit. 
+HealthLete IQ is an intelligence-driven analytics API built to evaluate athlete performance, audience demographics, and commercial brand fit.
 
-This branch implements the real-time Server-Sent Events (SSE) streaming chat pipeline, an in-memory vector cache for athlete profiles, an API security layer, and query intent routing.
+It serves two kinds of chatbot:
+
+| Chatbot | Used by | Endpoints | Key |
+|---|---|---|---|
+| Athlete AI Analyst (one athlete, uses embeddings) | Frontend server proxy (`/healthlete-ai`) | `/ingest`, `/chat`, `/chat/stream`, `/athlete/{id}` | `CHAT_API_KEY` |
+| Brand Assistant (global chat bubble + Home/Discovery AI search, no embeddings) | NestJS backend only | `/assistant/plan`, `/assistant/answer/stream` | `ASSISTANT_API_KEY` |
 
 ---
 
@@ -35,6 +40,11 @@ This branch implements the real-time Server-Sent Events (SSE) streaming chat pip
    - Configuration values in `app/core/config.py` are loaded once from `.env` and cached using `@lru_cache(maxsize=1)`.
    - Avoids repeated disk reads and environment parsing during concurrent requests.
 
+6. Brand Assistant (no per-brand embeddings)
+   - The AI turns a question into JSON search criteria; the NestJS backend runs the search on its own database with that brand's scores; the AI then writes the answer from the results.
+   - No athlete embeddings are stored per brand, so a brand changing its health conditions needs no re-indexing.
+   - Uses `gpt-4o-mini` for both steps and streams the answer over SSE. See [Brand Assistant](#brand-assistant).
+
 ---
 
 ## Tech Stack
@@ -59,8 +69,10 @@ healthlete-stream-chatbot/
 |   |       |-- chat.py         # Endpoints: POST /chat and POST /chat/stream
 |   |       |-- health.py       # Health checks and system diagnostics
 |   |       |-- athletes.py     # Athlete management endpoints
-|   |       `-- ingest.py       # Profile ingestion and vector embedding generation
+|   |       |-- ingest.py       # Profile ingestion and vector embedding generation
+|   |       `-- assistant.py    # Brand assistant: POST /assistant/plan and /assistant/answer/stream
 |   |-- ai/
+|   |   |-- assistant/          # Brand assistant: tool definitions, prompts, plan + answer service
 |   |   |-- chat.py             # Chat pipelines: ask_stream() and ask()
 |   |   |-- embeddings.py       # OpenAI vector embedding generation
 |   |   |-- retrieval.py        # Vector similarity search and score filtering
@@ -76,6 +88,7 @@ healthlete-stream-chatbot/
 |   |   `-- athlete.py          # Athlete record operations
 |   |-- schemas/
 |   |   |-- chat.py             # ChatRequest and ChatResponse schemas
+|   |   |-- assistant.py        # Brand assistant request/response schemas
 |   |   `-- athlete.py          # Ingestion schemas
 |   `-- utils/
 |       |-- format.py           # Text formatting helpers
@@ -138,6 +151,14 @@ Every request to `/chat/stream` is evaluated against three checks:
    - Maximum allowed question length is 500 characters.
    - Messages exceeding the limit return HTTP `422 Unprocessable Entity`.
 
+The `/assistant/*` endpoints use their own key and limits:
+
+- `X-API-Key` must match `ASSISTANT_API_KEY`. This key is shared only with the NestJS backend, never with a browser. If it is not set, the endpoints return `503`.
+- Rate limit is per brand (the backend sends `X-Brand-Id`), set by `ASSISTANT_RATE_LIMIT_PER_MINUTE` (default 30). One user question makes 2 requests (plan + answer), so 30 allows about 15 questions a minute per brand.
+- Tool results sent for the answer are capped at 24,000 characters (`413` if larger).
+
+Never commit real keys. Keep them in `.env` (gitignored) or AWS Secrets Manager, and generate them with `openssl rand -hex 32`.
+
 ---
 
 ## Environment Configuration
@@ -167,9 +188,22 @@ Create a `.env` file in the project root based on `.env.example`:
 | `MAX_TOKENS` | Maximum tokens for chat completions | `800` |
 | `CHAT_TEMPERATURE` | Sampling temperature | `0.2` |
 | `HISTORY_TURNS` | Number of recent conversation turns kept | `3` |
-| `CHAT_API_KEY` | Secret handshake key for client access | Required |
+| `CHAT_API_KEY` | Key for the athlete analyst endpoints. Must equal `HEALTHLETE_AI_API_KEY` on the frontend server | Required |
 | `RATE_LIMIT_PER_MINUTE` | Maximum allowed requests per IP per minute | `10` |
 | `MAX_QUERY_LENGTH` | Maximum allowed character length for message | `500` |
+| `ASSISTANT_API_KEY` | Key for `/assistant/*`. Must equal `HEALTHLETE_AI_ASSISTANT_API_KEY` in the NestJS backend | Required for the brand assistant |
+| `ASSISTANT_PLAN_MODEL` | Model that turns the question into tool calls | `gpt-4o-mini` |
+| `ASSISTANT_ANSWER_MODEL` | Model that writes the streamed answer | `gpt-4o-mini` |
+| `ASSISTANT_MAX_TOKENS` | Maximum tokens for an assistant answer | `450` |
+| `ASSISTANT_RATE_LIMIT_PER_MINUTE` | Maximum `/assistant/*` requests per brand per minute | `30` |
+
+Which project holds which key:
+
+```
+Frontend server  HEALTHLETE_AI_API_KEY            ==  AI  CHAT_API_KEY
+NestJS backend   HEALTHLETE_AI_ASSISTANT_API_KEY  ==  AI  ASSISTANT_API_KEY
+NestJS backend   HEALTHLETE_AI_API_BASE_URL       =   URL of this AI service
+```
 
 ---
 
@@ -269,9 +303,76 @@ curl http://localhost:8000/health
 
 ---
 
+## Brand Assistant
+
+Powers the global chat bubble and the Home/Discovery AI search. The browser never calls these endpoints: it calls the NestJS backend (`POST /api/v1/brand/assistant/chat/stream`), which calls this service.
+
+```
+1. User asks         "NFL players open about mental health with 90+ match"
+2. NestJS            checks the login, takes the brand from it (never from the AI)
+3. AI  /plan         -> search_athletes { sport: "NFL", conditions: ["Mental Health"], min_match_score: 90 }
+4. NestJS            runs the search on its database with this brand's scores
+5. Browser           shows athlete cards straight away
+6. AI  /answer       writes the answer from a short summary of the results
+7. Browser           shows the answer as it streams
+```
+
+Tools the planner can choose (names must match the NestJS assistant module):
+
+| Tool | What the backend does |
+|---|---|
+| `search_athletes` | Discovery search: conditions, sport, athlete name/text, minimum scores, sort |
+| `get_shortlist` | The brand's saved athletes |
+| `get_campaigns` | The brand's campaigns, optionally by status |
+| `get_partnership_requests` | The brand's partnership requests, optionally by status |
+| `platform_help` | How-to answers about the platform |
+| `answer_directly` | Greetings and off-topic messages, no data needed |
+
+### `POST /assistant/plan`
+
+Headers: `X-API-Key: <ASSISTANT_API_KEY>`, `X-Brand-Id: <brand id>`
+
+```json
+{
+  "message": "NFL players open about mental health with 90+ match",
+  "chat_history": [],
+  "catalog": {
+    "conditions": ["Mental Health", "Type 1 Diabetes"],
+    "sports": ["NFL", "NBA"],
+    "brand_conditions": ["Type 1 Diabetes"]
+  }
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "tool_calls": [
+    {"name": "search_athletes", "arguments": {"sport": "NFL", "conditions": ["Mental Health"], "min_match_score": 90}}
+  ]
+}
+```
+
+### `POST /assistant/answer/stream`
+
+Same headers. The body carries the question, `surface` (`assistant` for the chat bubble, `discover` for the shorter Home/Discovery answer) and up to 6 `tool_results` from the backend. The response is SSE:
+
+```
+data: {"type": "content", "delta": "I found 2 NFL athletes..."}
+data: {"type": "done", "answer": "I found 2 NFL athletes..."}
+data: {"type": "error", "message": "..."}
+```
+
+---
+
 ## Troubleshooting
 
 - `401 Unauthorized`: Verify the `X-API-Key` header matches `CHAT_API_KEY` in `.env`.
 - `429 Too Many Requests`: Client IP exceeded the allowed requests per minute. Wait 60 seconds or adjust `RATE_LIMIT_PER_MINUTE`.
 - `422 Unprocessable Entity`: The input message exceeds 500 characters.
 - `pgvector extension error`: Verify PostgreSQL has pgvector installed (`CREATE EXTENSION IF NOT EXISTS vector;`).
+- `503 The brand assistant is not configured` on `/assistant/*`: set `ASSISTANT_API_KEY` in `.env` and restart.
+- `401` on `/assistant/*`: `ASSISTANT_API_KEY` here and `HEALTHLETE_AI_ASSISTANT_API_KEY` in the backend are different.
+- `"HealthLete AI is not configured on the server."` from the frontend: `HEALTHLETE_AI_API_KEY` is missing on the frontend server (runtime env, e.g. pm2), not in GitHub secrets.
+- `429` on `/assistant/*`: that brand passed `ASSISTANT_RATE_LIMIT_PER_MINUTE`. Wait a minute.
