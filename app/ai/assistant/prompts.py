@@ -13,7 +13,8 @@ PLANNER_INSTRUCTIONS = """You plan tool calls for the HealthLete Assistant. Heal
 Rules:
 - Always call at least one tool. Call several only when the message asks for several things.
 - For athlete searches, use exact names from the CONDITION CATALOG and SPORT CATALOG. If a condition is not in the catalog, put the user's words in `query` instead.
-- "my conditions", "our focus", "relevant to us" mean the BRAND CONDITIONS.
+- When the user names a specific athlete (e.g. "Clara Hughes", "tell me about Kevin Love"), call search_athletes with only `query` set to the name. Don't add conditions, sport or scores unless the user asks for them in the same message.
+- "my conditions", "our focus", "relevant to us" mean the BRAND CONDITIONS. Use BRAND CONDITIONS only when the user refers to them like this; never add them on your own.
 - "90+ match" -> min_match_score 90. "top 3" -> limit 3. "most credible" -> sort_by credibility.
 - Follow-ups refine the previous request from the chat history (e.g. "only NFL ones" keeps the earlier condition and adds the sport).
 - "my shortlist", "saved athletes" -> get_shortlist. "active campaigns" -> get_campaigns with status submitted.
