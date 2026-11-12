@@ -14,7 +14,13 @@ from typing import Dict, Optional
 from fastapi import HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
-from app.core.config import CHAT_API_KEY, RATE_LIMIT_PER_MINUTE, MAX_QUERY_LENGTH
+from app.core.config import (
+    ASSISTANT_API_KEY,
+    ASSISTANT_RATE_LIMIT_PER_MINUTE,
+    CHAT_API_KEY,
+    MAX_QUERY_LENGTH,
+    RATE_LIMIT_PER_MINUTE,
+)
 
 
 class IPRateLimiter:
@@ -122,3 +128,38 @@ def validate_payload_message(message: str) -> str:
             detail=f"Message exceeds maximum allowed length of {MAX_QUERY_LENGTH} characters (received {len(cleaned)})."
         )
     return cleaned
+
+
+# ── Brand assistant (service-to-service) ────────────────────────────────
+# Only the NestJS backend calls /assistant/*. It sends its own key, so the
+# browser proxy (which holds CHAT_API_KEY) cannot reach these endpoints.
+# Every call comes from the backend's IP, so the limit is per brand instead.
+_assistant_rate_limiter = IPRateLimiter(
+    max_requests=ASSISTANT_RATE_LIMIT_PER_MINUTE, window_seconds=60.0
+)
+
+brand_id_header = APIKeyHeader(name="X-Brand-Id", auto_error=False)
+
+
+def enforce_assistant_security(
+    request: Request,
+    x_api_key: Optional[str] = Security(api_key_header),
+    x_brand_id: Optional[str] = Security(brand_id_header),
+) -> None:
+    if not ASSISTANT_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The brand assistant is not configured.",
+        )
+    if not x_api_key or not hmac.compare_digest(
+        x_api_key.strip(), ASSISTANT_API_KEY.strip()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid 'X-API-Key' provided.",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    brand_id = (x_brand_id or "").strip()[:64]
+    _assistant_rate_limiter.check_rate_limit(
+        f"brand:{brand_id}" if brand_id else get_client_ip(request)
+    )

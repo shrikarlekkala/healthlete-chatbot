@@ -8,6 +8,7 @@ from app.api.v1 import health
 from app.api.v1 import ingest
 from app.api.v1 import chat
 from app.api.v1 import athletes
+from app.api.v1 import assistant
 
 api_router = APIRouter()
 
@@ -15,3 +16,4 @@ api_router.include_router(health.router)
 api_router.include_router(ingest.router)
 api_router.include_router(chat.router)
 api_router.include_router(athletes.router)
+api_router.include_router(assistant.router)

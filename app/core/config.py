@@ -110,6 +110,16 @@ class Settings:
         self.TEMPERATURE: float = float(os.getenv("CHAT_TEMPERATURE", "0.2"))
         self.HISTORY_TURNS: int = int(os.getenv("HISTORY_TURNS", "3"))
 
+        # Brand assistant (Home / Discovery / global chat). Only the NestJS
+        # backend calls these endpoints, so they use their own key.
+        self.ASSISTANT_API_KEY: str = os.getenv("ASSISTANT_API_KEY", "")
+        self.ASSISTANT_PLAN_MODEL: str = os.getenv("ASSISTANT_PLAN_MODEL", "gpt-4o-mini")
+        self.ASSISTANT_ANSWER_MODEL: str = os.getenv("ASSISTANT_ANSWER_MODEL", "gpt-4o-mini")
+        self.ASSISTANT_MAX_TOKENS: int = int(os.getenv("ASSISTANT_MAX_TOKENS", "450"))
+        self.ASSISTANT_RATE_LIMIT_PER_MINUTE: int = int(
+            os.getenv("ASSISTANT_RATE_LIMIT_PER_MINUTE", "30")
+        )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -146,3 +156,9 @@ SIMILARITY_THRESHOLD: float = settings.SIMILARITY_THRESHOLD
 MAX_TOKENS: int = settings.MAX_TOKENS
 TEMPERATURE: float = settings.TEMPERATURE
 HISTORY_TURNS: int = settings.HISTORY_TURNS
+
+ASSISTANT_API_KEY: str = settings.ASSISTANT_API_KEY
+ASSISTANT_PLAN_MODEL: str = settings.ASSISTANT_PLAN_MODEL
+ASSISTANT_ANSWER_MODEL: str = settings.ASSISTANT_ANSWER_MODEL
+ASSISTANT_MAX_TOKENS: int = settings.ASSISTANT_MAX_TOKENS
+ASSISTANT_RATE_LIMIT_PER_MINUTE: int = settings.ASSISTANT_RATE_LIMIT_PER_MINUTE
