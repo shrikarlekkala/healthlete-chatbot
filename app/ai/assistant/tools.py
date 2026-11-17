@@ -106,8 +106,10 @@ TOOLS: List[Dict[str, Any]] = [
     ),
     _tool(
         GET_SHORTLIST,
-        "List the athletes the user saved to their shortlist, with their scores.",
-        {},
+        "List the athletes the user saved to their shortlist, with their scores. "
+        "Shortlists aren't linked to campaigns: for a campaign or condition "
+        "(e.g. 'shortlist for the asthma campaign') pass that condition.",
+        {"condition": {"type": "string", "description": "Only shortlisted athletes with this health condition."}},
     ),
     _tool(
         GET_CAMPAIGNS,
