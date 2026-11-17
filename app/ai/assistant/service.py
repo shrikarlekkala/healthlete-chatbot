@@ -89,7 +89,10 @@ async def answer_stream(
 ) -> AsyncIterator[Dict[str, Any]]:
     started = time.perf_counter()
     instructions = prompts.ANSWER_INSTRUCTIONS
-    if surface == "discover":
+    if any(result.get("name") == prompts.BRIEF_TOOL for result in tool_results):
+        # Brief answers list several athletes, so the short Discovery note doesn't apply.
+        instructions += prompts.BRIEF_ANSWER_NOTE
+    elif surface == "discover":
         instructions += prompts.DISCOVER_SURFACE_NOTE
 
     parts: List[str] = []
