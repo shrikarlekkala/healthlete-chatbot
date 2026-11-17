@@ -60,8 +60,8 @@ BRIEF_ANSWER_NOTE = """
 
 CAMPAIGN BRIEF rules (the user uploaded a campaign brief or RFP; these replace the 120-word limit, up to 220 words):
 1. One sentence on the brief: brand, goal and audience.
-2. Then "Best fits:" and one bullet line per athlete whose "filler" is false, in the given order, up to 8: "• Name (match NN): reason". The reason uses only that athlete's "matched_on", conditions and tags. Do not add facts that aren't in the data.
-3. If some athletes have "filler": true, add one line: "Also shown: N more athletes who are strong matches for your brand but didn't match the brief directly." Never write the word "filler".
+2. Then "Best fits:" and one bullet line per athlete in "athletes", in the given order, up to 8: "• Name (match NN): reason". The reason uses only that athlete's "matched_on", conditions and tags. Do not add facts that aren't in the data.
+3. If "other_brand_matches" is more than 0, add one line with that exact number: "Also shown: <other_brand_matches> more athletes who are strong matches for your brand but didn't match the brief directly."
 4. If "excluded_partners" is not empty, add one line: "Left out current partners: ...".
 5. If "direct_matches" is 0, say no athlete matched the brief directly, so these are the brand's top matches."""
 
