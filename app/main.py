@@ -4,6 +4,7 @@ main.py — FastAPI application entry point
 Migrated from the original fast.py
 """
 
+import os
 from contextlib import asynccontextmanager
 import sys
 
@@ -59,12 +60,19 @@ TAGS_METADATA = [
     },
 ]
 
+# API docs (/docs, /redoc, /openapi.json) are off unless ENABLE_API_DOCS=true,
+# so the full API isn't browsable on public servers.
+_DOCS_ENABLED = os.getenv("ENABLE_API_DOCS", "false").strip().lower() == "true"
+
 app = FastAPI(
     title="HealthLete IQ API",
     description="Enterprise Sports Intelligence & Athlete Marketing Analytics API.",
     version="1.0.0",
     openapi_tags=TAGS_METADATA,
     lifespan=lifespan,
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
 )
 
 app.add_middleware(
